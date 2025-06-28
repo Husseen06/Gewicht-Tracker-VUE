@@ -2,87 +2,110 @@
 import { ref, shallowRef, computed, watch, nextTick } from 'vue'
 import Chart from 'chart.js/auto'
 
-const weights = ref(JSON.parse(localStorage.getItem('weights')) || [])
+// OOP: WeightEntry class
+class WeightEntry {
+  constructor(weight, date = Date.now()) {
+    this.weight = Number(weight)
+    this.date = date
+  }
+}
 
+// OOP: WeightTracker class
+class WeightTracker {
+  constructor() {
+    const saved = JSON.parse(localStorage.getItem('weights')) || []
+    this.entries = saved.map(e => new WeightEntry(e.weight, e.date))
+  }
+
+  add(weight) {
+    const entry = new WeightEntry(weight)
+    this.entries.push(entry)
+    this.save()
+  }
+
+  delete(index) {
+    this.entries.splice(index, 1)
+    this.save()
+  }
+
+  getCurrent() {
+    return this.entries.slice().sort((a, b) => b.date - a.date)[0] || new WeightEntry(0)
+  }
+
+  save() {
+    localStorage.setItem('weights', JSON.stringify(this.entries))
+  }
+}
+
+const tracker = ref(new WeightTracker())
+
+const weights = computed(() => tracker.value.entries)
+const weightInput = ref(0)
 const weightChartEl = ref(null)
-
 const weightChart = shallowRef(null)
 
-const weightInput = ref(0)
-
-const currentWeight = computed(() => {
-	return weights.value.sort((a, b) => b.date - a.date)[0] || { weight: 0 }
-})
+const currentWeight = computed(() => tracker.value.getCurrent())
 
 const addWeight = () => {
-	if (weightInput.value) {
-		weights.value.push({
-			weight: weightInput.value,
-			date: new Date().getTime()
-		})
-		localStorage.setItem('weights', JSON.stringify(weights.value))
-		weightInput.value = ''
-	}
+  if (weightInput.value) {
+    tracker.value.add(weightInput.value)
+    weightInput.value = ''
+  }
 }
 
 const deleteWeight = (index) => {
-	weights.value.splice(index, 1)
-	localStorage.setItem('weights', JSON.stringify(weights.value))
+  tracker.value.delete(index)
 }
 
 watch(weights, (newWeights) => {
-	const ws = [...newWeights]
-
-	if (weightChart.value) {
-		weightChart.value.data.labels = ws
-			.sort((a, b) => a.date - b.date)
-			.map(weight => new Date(weight.date).toLocaleDateString('nl-NL'))
-			.slice(-7)
-
-		weightChart.value.data.datasets[0].data = ws
-			.sort((a, b) => a.date - b.date)
-			.map(weight => weight.weight)
-			.slice(-7)
-
-		weightChart.value.update()
-		return
-	}
-
-	nextTick(() => {
-		weightChart.value = new Chart(weightChartEl.value.getContext('2d'), {
-			type: 'line',
-			data: {
-				labels: ws
-					.sort((a, b) => a.date - b.date)
-					.map(weight => new Date(weight.date).toLocaleDateString('nl-NL')),
-				datasets: [
-					{
-						label: 'Gewicht',
-						data: ws
-							.sort((a, b) => a.date - b.date)
-							.map(weight => weight.weight),
-						backgroundColor: 'rgba(255, 105, 180, 0.2)',
-						borderColor: 'rgba(255, 105, 180, 1)',
-						borderWidth: 1,
-						fill: true
-					}
-				]
-			},
-			options: {
-				responsive: true,
-				maintainAspectRatio: false,
-				plugins: {
-					tooltip: {
-						callbacks: {
-							label: function(context) {
-								return context.dataset.label + ': ' + context.parsed.y + 'kg'
-							}
-						}
-					}
-				}
-			}
-		})
-	})
+  const ws = [...newWeights]
+  if (weightChart.value) {
+    weightChart.value.data.labels = ws
+      .sort((a, b) => a.date - b.date)
+      .map(weight => new Date(weight.date).toLocaleDateString('nl-NL'))
+      .slice(-7)
+    weightChart.value.data.datasets[0].data = ws
+      .sort((a, b) => a.date - b.date)
+      .map(weight => weight.weight)
+      .slice(-7)
+    weightChart.value.update()
+    return
+  }
+  nextTick(() => {
+    weightChart.value = new Chart(weightChartEl.value.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: ws
+          .sort((a, b) => a.date - b.date)
+          .map(weight => new Date(weight.date).toLocaleDateString('nl-NL')),
+        datasets: [
+          {
+            label: 'Gewicht',
+            data: ws
+              .sort((a, b) => a.date - b.date)
+              .map(weight => weight.weight),
+            backgroundColor: 'rgba(255, 105, 180, 0.2)',
+            borderColor: 'rgba(255, 105, 180, 1)',
+            borderWidth: 1,
+            fill: true
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return context.dataset.label + ': ' + context.parsed.y + 'kg'
+              }
+            }
+          }
+        }
+      }
+    })
+  })
 }, { deep: true })
 </script>
 
